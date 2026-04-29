@@ -143,9 +143,11 @@ export function createCLI(): Command {
   program
     .command('tui')
     .description('Start interactive TUI dashboard')
-    .action(() => {
-      info('TUI mode - launching interactive dashboard');
-      console.log('TUI not yet implemented. Use daemon or sync commands.');
+    .option('-c, --config <path>', 'Config file path', DEFAULT_CONFIG_PATH)
+    .option('-s, --state <path>', 'State database path', DEFAULT_STATE_PATH)
+    .action((options) => {
+      console.log('TUI requires interactive terminal. Run: npm run tui');
+      console.log(`Or: tsx src/run-tui.ts ${options.config}`);
     });
 
   program

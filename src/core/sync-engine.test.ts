@@ -3,6 +3,16 @@ import { SyncEngine } from './sync-engine.ts';
 import { InMemoryStateManager } from './in-memory-state-manager.ts';
 import type { RepoConfig, Settings, AuthorMapping } from '../types/config.ts';
 
+vi.mock('fs', () => ({
+  existsSync: vi.fn().mockReturnValue(true),
+  mkdirSync: vi.fn(),
+  readFileSync: vi.fn(),
+}));
+
+vi.mock('execa', () => ({
+  execa: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
+}));
+
 vi.mock('./git-operations.ts', () => ({
   GitOperations: vi.fn().mockImplementation(() => ({
     fetchAll: vi.fn().mockResolvedValue(undefined),
