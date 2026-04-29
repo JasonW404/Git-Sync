@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  git-sync:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: git-sync
+    volumes:
+      # 配置文件
+      - ./config:/app/config:ro
+      
+      # 状态数据（SQLite）
+      - ./state:/app/state
+      
+      # 仓库工作目录
+      - ./repos:/app/repos
+      
+      # SSH 密钥（只读挂载）
+      # 请确保宿主机上 ~/.ssh/id_rsa 存在且有访问目标仓库的权限
+      - ${HOME}/.ssh/id_rsa:/app/.ssh/id_rsa:ro
+      - ${HOME}/.ssh/id_rsa.pub:/app/.ssh/id_rsa.pub:ro
+      - ${HOME}/.ssh/known_hosts:/app/.ssh/known_hosts:ro
+    
+    environment:
+      # 时区
+      - TZ=${TZ:-Asia/Shanghai}
+      
+      # SSH 认证命令
+      - GIT_SSH_COMMAND=ssh -i /app/.ssh/id_rsa -o StrictHostKeyChecking=accept-new
+      
+      # HTTPS 认证（可选）
+      # GitHub Personal Access Token
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      
+      # 内部仓库认证（如使用 HTTPS）
+      # Token 方式
+      - INTERNAL_GIT_TOKEN=${INTERNAL_GIT_TOKEN:-}
+      
+      # 用户名密码方式
+      - INTERNAL_USER=${INTERNAL_USER:-}
+      - INTERNAL_PASSWORD=${INTERNAL_PASSWORD:-}
+    
+    restart: unless-stopped
+    
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "node", "dist/cli.js", "check-filter-repo"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+# 可选：定义网络
+# networks:
+#   git-sync-net:
+#     driver: bridge

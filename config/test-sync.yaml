@@ -1,0 +1,23 @@
+version: 1
+
+settings:
+  repo_dir: /tmp/git-sync-work
+  default_schedule: "0 0 * * *"
+  timezone: "Asia/Shanghai"
+  max_concurrent: 1
+  unmapped_author_policy: warn
+
+author_mappings:
+  - match_email: "jasonwong2019@outlook.com"
+    internal_name: "WangJL"
+    internal_email: "jason_wjl@qq.com"
+
+sync_tasks:
+  - name: test-sync
+    repos:
+      - id: github-trending-analysis
+        github_url: git@github.com:JasonW404-HW/github-trending-analysis.git
+        internal_url: /tmp/git-sync-internal
+        branches: ["main"]
+        auth:
+          type: ssh
