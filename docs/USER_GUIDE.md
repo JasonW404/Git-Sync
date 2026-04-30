@@ -17,25 +17,46 @@
 
 - Docker 或 Podman
 - SSH 密钥（用于 GitHub 认证）
-- Python 环境（用于 git-filter-repo）
 
 ### 5 分钟部署
 
 ```bash
-# 1. 准备配置文件
+# 1. 克隆项目（或下载 release）
+git clone https://github.com/JasonW404-HW/git-sync.git
+cd git-sync
+
+# 2. 准备配置文件
 cp config/git-sync.yaml.example config/git-sync.yaml
 vim config/git-sync.yaml  # 编辑你的仓库和作者映射
 
-# 2. 准备 SSH 密钥
-# 将你的 GitHub SSH 密钥放到指定位置
-mkdir -p ~/.ssh
-# 确保你的密钥文件存在（如 id_rsa）
+# 3. 创建必要目录
+mkdir -p state repos
 
-# 3. 启动容器
+# 4. 启动容器
 docker-compose up -d
 
-# 4. 查看状态
+# 5. 查看状态
 docker exec -it git-sync node dist/cli.cjs status --json
+```
+
+### 使用预构建镜像（推荐）
+
+```bash
+# 拉取最新镜像
+docker pull ghcr.io/jasonw404-hw/git-sync:latest
+
+# 或指定版本
+docker pull ghcr.io/jasonw404-hw/git-sync:v1.0.0
+
+# 使用预构建镜像运行
+docker run -d \
+  --name git-sync \
+  -v ./config:/app/config:ro \
+  -v ./state:/app/state \
+  -v ./repos:/app/repos \
+  -v ~/.ssh/id_rsa:/app/.ssh/id_rsa:ro \
+  -e GIT_SSH_COMMAND="ssh -i /app/.ssh/id_rsa -o StrictHostKeyChecking=accept-new" \
+  ghcr.io/jasonw404-hw/git-sync:latest
 ```
 
 ---
@@ -44,6 +65,41 @@ docker exec -it git-sync node dist/cli.cjs status --json
 
 ### 方式一：Docker Compose（推荐）
 
+**完整部署流程：**
+
+```bash
+# 1. 克隆项目
+git clone https://github.com/JasonW404-hw/git-sync.git
+cd git-sync
+
+# 2. 创建目录结构
+mkdir -p config state repos logs
+
+# 3. 复制并编辑配置
+cp config/git-sync.yaml.example config/git-sync.yaml
+vim config/git-sync.yaml
+
+# 4. 配置 SSH 密钥
+# 确保 ~/.ssh/id_rsa 存在并已添加到 GitHub
+ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -N ""  # 如没有密钥
+cat ~/.ssh/id_rsa.pub  # 添加到 GitHub Settings → SSH Keys
+
+# 5. 创建内部仓库（如使用本地路径）
+mkdir -p internal-repos
+cd internal-repos
+git init --bare my-repo.git  # 创建 bare 仓库
+
+# 6. 启动服务
+docker-compose up -d
+
+# 7. 查看日志确认启动成功
+docker logs -f git-sync
+
+# 8. 验证同步
+docker exec -it git-sync node dist/cli.cjs sync
+```
+
+**启动服务：**
 ```bash
 # 启动服务
 docker-compose up -d
@@ -62,9 +118,48 @@ docker-compose down
 | `/app/config` | 配置文件目录 | 挂载本地 `config/` |
 | `/app/state` | 状态数据库 | 持久化挂载 |
 | `/app/repos` | 仓库工作目录 | 持久化挂载 |
-| `/app/.ssh` | SSH 密钥 | 挂载 `~/.ssh` |
+| `/app/.ssh` | SSH 密钥 | 挂载 `~/.ssh`（只读） |
 
-### 方式二：直接运行
+**docker-compose.yaml 配置详解：**
+
+```yaml
+version: '3.8'
+
+services:
+  git-sync:
+    build:
+      context: .          # 使用本地源码构建
+      dockerfile: Dockerfile
+    # 或使用预构建镜像：
+    # image: ghcr.io/jasonw404-hw/git-sync:latest
+    
+    container_name: git-sync
+    volumes:
+      - ./config:/app/config:ro           # 配置文件（只读）
+      - ./state:/app/state                 # 状态数据库
+      - ./repos:/app/repos                 # 仓库工作目录
+      - ${HOME}/.ssh/id_rsa:/app/.ssh/id_rsa:ro       # SSH 私钥
+      - ${HOME}/.ssh/id_rsa.pub:/app/.ssh/id_rsa.pub:ro  # SSH 公钥
+      - ${HOME}/.ssh/known_hosts:/app/.ssh/known_hosts:ro  # known_hosts
+    
+    environment:
+      - TZ=Asia/Shanghai                   # 时区
+      - GIT_SSH_COMMAND=ssh -i /app/.ssh/id_rsa -o StrictHostKeyChecking=accept-new
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}     # 可选：GitHub Token
+      - INTERNAL_GIT_TOKEN=${INTERNAL_GIT_TOKEN:-}  # 可选：内部仓库 Token
+    
+    restart: unless-stopped                # 自动重启
+    
+    healthcheck:
+      test: ["CMD", "node", "dist/cli.cjs", "check-filter-repo"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+```
+
+### 方式二：直接运行（Ubuntu/WSL2）
+
+详见 [Ubuntu/WSL2 安装指南](docs/UBUNTU_INSTALL.md)
 
 ```bash
 # 安装依赖
@@ -79,6 +174,31 @@ node dist/cli.cjs daemon -c config/git-sync.yaml
 
 # 或运行单次同步
 node dist/cli.cjs sync -c config/git-sync.yaml
+```
+
+### 方式三：使用预构建 Docker 镜像
+
+```bash
+# 拉取镜像
+docker pull ghcr.io/jasonw404-hw/git-sync:latest
+
+# 运行容器
+docker run -d \
+  --name git-sync \
+  --restart unless-stopped \
+  -v $(pwd)/config:/app/config:ro \
+  -v $(pwd)/state:/app/state \
+  -v $(pwd)/repos:/app/repos \
+  -v ~/.ssh/id_rsa:/app/.ssh/id_rsa:ro \
+  -e GIT_SSH_COMMAND="ssh -i /app/.ssh/id_rsa -o StrictHostKeyChecking=accept-new" \
+  -e TZ=Asia/Shanghai \
+  ghcr.io/jasonw404-hw/git-sync:latest
+
+# 查看日志
+docker logs -f git-sync
+
+# 执行手动同步
+docker exec -it git-sync node dist/cli.cjs sync
 ```
 
 ---
@@ -452,6 +572,26 @@ docker exec -it git-sync node dist/cli.cjs sync --force
 | `failure_count` | 连续失败次数 |
 | `last_error` | 最后错误信息 |
 
+### Q8: 如何使用预构建镜像
+
+```bash
+# 查看可用版本
+# GitHub: https://github.com/JasonW404-HW/git-sync/pkgs/container/git-sync
+
+# 拉取镜像
+docker pull ghcr.io/jasonw404-hw/git-sync:latest
+docker pull ghcr.io/jasonw404-hw/git-sync:v1.0.0
+
+# 运行
+docker run -d --name git-sync \
+  -v ./config:/app/config:ro \
+  -v ./state:/app/state \
+  -v ./repos:/app/repos \
+  -v ~/.ssh/id_rsa:/app/.ssh/id_rsa:ro \
+  -e GIT_SSH_COMMAND="ssh -i /app/.ssh/id_rsa -o StrictHostKeyChecking=accept-new" \
+  ghcr.io/jasonw404-hw/git-sync:latest
+```
+
 ---
 
 ## 支持
@@ -459,6 +599,7 @@ docker exec -it git-sync node dist/cli.cjs sync --force
 如有问题，请查看：
 - [设计文档](docs/DESIGN.md)
 - [配置示例](config/git-sync.yaml.example)
+- [Ubuntu/WSL2 安装指南](docs/UBUNTU_INSTALL.md)
 - 项目 README
 
 或通过日志排查：

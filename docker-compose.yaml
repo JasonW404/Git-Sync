@@ -2,35 +2,48 @@ version: '3.8'
 
 services:
   git-sync:
+    # 使用本地源码构建
     build:
       context: .
       dockerfile: Dockerfile
+    
+    # 或使用预构建镜像（推荐生产环境）
+    # image: ghcr.io/jasonw404-hw/git-sync:latest
+    # image: ghcr.io/jasonw404-hw/git-sync:v1.0.0
+    
     container_name: git-sync
+    
+    # 数据卷挂载
     volumes:
-      # 配置文件
+      # 配置文件（只读，防止容器内修改）
       - ./config:/app/config:ro
       
-      # 状态数据（SQLite）
+      # 状态数据（SQLite 数据库）
       - ./state:/app/state
       
-      # 仓库工作目录
+      # 仓库工作目录（存放克隆的仓库）
       - ./repos:/app/repos
       
       # SSH 密钥（只读挂载）
-      # 请确保宿主机上 ~/.ssh/id_rsa 存在且有访问目标仓库的权限
+      # 重要：确保宿主机上 ~/.ssh/id_rsa 存在且已添加到 GitHub
+      # 生成密钥：ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa
+      # 添加到 GitHub：cat ~/.ssh/id_rsa.pub → GitHub Settings → SSH Keys
       - ${HOME}/.ssh/id_rsa:/app/.ssh/id_rsa:ro
       - ${HOME}/.ssh/id_rsa.pub:/app/.ssh/id_rsa.pub:ro
       - ${HOME}/.ssh/known_hosts:/app/.ssh/known_hosts:ro
     
+    # 环境变量
     environment:
-      # 时区
+      # 时区设置
       - TZ=${TZ:-Asia/Shanghai}
       
       # SSH 认证命令
+      # accept-new：自动接受新主机密钥（首次连接）
       - GIT_SSH_COMMAND=ssh -i /app/.ssh/id_rsa -o StrictHostKeyChecking=accept-new
       
       # HTTPS 认证（可选）
       # GitHub Personal Access Token
+      # 创建 Token：GitHub Settings → Developer settings → Personal access tokens
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
       
       # 内部仓库认证（如使用 HTTPS）
@@ -41,17 +54,30 @@ services:
       - INTERNAL_USER=${INTERNAL_USER:-}
       - INTERNAL_PASSWORD=${INTERNAL_PASSWORD:-}
     
+    # 自动重启策略
+    # unless-stopped：除非手动停止，否则总是重启
     restart: unless-stopped
     
     # 健康检查
+    # 每 30 秒检查一次 git-filter-repo 是否可用
     healthcheck:
-      test: ["CMD", "node", "dist/cli.js", "check-filter-repo"]
+      test: ["CMD", "node", "dist/cli.cjs", "check-filter-repo"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
 
-# 可选：定义网络
+# 可选：定义网络（多容器通信）
 # networks:
 #   git-sync-net:
 #     driver: bridge
+
+# 可选：资源限制
+# deploy:
+#   resources:
+#     limits:
+#       cpus: '1'
+#       memory: 512M
+#     reservations:
+#       cpus: '0.5'
+#       memory: 256M

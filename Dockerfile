@@ -54,7 +54,7 @@ ENV NODE_ENV=production
 ENV TZ=Asia/Shanghai
 
 # 入口点
-ENTRYPOINT ["node", "dist/cli.js"]
+ENTRYPOINT ["node", "dist/cli.cjs"]
 
 # 默认命令：启动守护进程
 CMD ["daemon"]
