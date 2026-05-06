@@ -1,8 +1,15 @@
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
 from git_sync.models.config import AuthorMapping
+
+try:
+    import git_filter_repo
+    HAS_GIT_FILTER_REPO = True
+except ImportError:
+    HAS_GIT_FILTER_REPO = False
 
 
 class AuthorRewriter:
@@ -26,15 +33,28 @@ class AuthorRewriter:
             if force:
                 args.append("--force")
 
-            result = subprocess.run(
-                ["git-filter-repo"] + args,
-                cwd=self.repo_path,
-                capture_output=True,
-                text=True,
-            )
-
-            if result.returncode != 0:
-                raise RuntimeError(f"git-filter-repo failed: {result.stderr}")
+            if HAS_GIT_FILTER_REPO:
+                # Use Python API directly (works when bundled in executable)
+                old_argv = sys.argv
+                old_cwd = Path.cwd()
+                try:
+                    sys.argv = ["git-filter-repo"] + args
+                    import os
+                    os.chdir(self.repo_path)
+                    git_filter_repo.main()
+                finally:
+                    sys.argv = old_argv
+                    os.chdir(old_cwd)
+            else:
+                # Fallback to CLI call
+                result = subprocess.run(
+                    ["git-filter-repo"] + args,
+                    cwd=self.repo_path,
+                    capture_output=True,
+                    text=True,
+                )
+                if result.returncode != 0:
+                    raise RuntimeError(f"git-filter-repo failed: {result.stderr}")
 
             hash_mappings = self._get_hash_mappings()
             return hash_mappings

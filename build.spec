@@ -33,6 +33,7 @@ a = Analysis(
         "git_sync.utils.mailmap",
         "git_sync.tui",
         "git_sync.tui.app",
+        "git_filter_repo",
         "apscheduler",
         "apscheduler.schedulers",
         "apscheduler.schedulers.base",
