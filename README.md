@@ -1,93 +1,53 @@
-# Git-Sync Tool
+# Git-Sync (Python Version)
 
 将 GitHub 仓库同步到内部代码仓库，并自动替换 commit 作者信息。
 
 ## 功能特性
 
-- ✅ 定时同步 GitHub 仓库到内部仓库
-- ✅ 自动替换 commit 作者信息（user.name & user.email）
-- ✅ 支持多仓库、多分支同步
-- ✅ 全局作者映射 + 仓库局部覆写
-- ✅ CLI 完整命令支持
-- ✅ TUI 交互式仪表盘（Ink）
-- ✅ Docker/Podman 容器化部署
-- ✅ SSH / HTTPS（Token / 用户名密码）多种认证方式
+- 定时同步 GitHub 仓库到内部仓库
+- 自动替换 commit 作者信息 (user.name & user.email)
+- 支持多仓库、多分支同步
+- 全局作者映射 + 仓库局部覆写
+- CLI 完整命令支持
+- TUI 交互式仪表盘 (Textual)
+- 单文件可执行文件打包 (PyInstaller)
 
-## 快速开始
+## 安装
 
-### 1. 准备配置文件
-
-```bash
-# 复制示例配置
-cp config/git-sync.yaml.example config/git-sync.yaml
-
-# 编辑配置
-vim config/git-sync.yaml
-```
-
-### 2. 配置作者映射
-
-```yaml
-author_mappings:
-  - match_email: "alice@personal.com"
-    internal_name: "Alice Wang"
-    internal_email: "alice.wang@internal.corp"
-```
-
-### 3. 启动容器
+### 方式一：pip 安装
 
 ```bash
-# 使用 Docker
-docker-compose up -d
-
-# 或使用 Podman
-podman-compose up -d
+pip install -e .
 ```
 
-### 4. 查看状态
+### 方式二：使用预编译可执行文件
 
 ```bash
-# CLI 模式
-docker-compose exec git-sync git-sync status
+# 打包
+pyinstaller build.spec --onefile
 
-# TUI 模式
-docker-compose exec git-sync git-sync tui
+# 输出: dist/git-sync
 ```
 
-## 文档
+## 系统要求
 
-- [设计文档](docs/DESIGN.md) - 完整的技术架构和实现细节
-- [配置说明](docs/CONFIG.md) - 配置文件详细说明
-
-## 安装要求
-
-### 容器部署
-
-- Docker 或 Podman
-- git-filter-repo（已在容器中预装）
-
-### 本地开发
-
-- Node.js 20+
-- Python 3 + pip
-- git-filter-repo
+- Python 3.10+
+- git 命令行工具
+- git-filter-repo (可选，用于作者重写)
 
 ```bash
 # 安装 git-filter-repo
 pip install git-filter-repo
-
-# 安装 Node.js 依赖
-npm install
 ```
 
 ## CLI 命令
 
 ```bash
 # 查看状态
-git-sync status [--repo <id>] [--json]
+git-sync status [--json]
 
 # 手动同步
-git-sync sync [--repo <id>] [--force] [--dry-run]
+git-sync sync [--repo <id>] [--force]
 
 # 配置管理
 git-sync config show
@@ -97,87 +57,46 @@ git-sync config validate
 git-sync tui
 
 # 服务管理
-git-sync daemon [--stop] [--status]
+git-sync daemon [--stop]
 
-# 工具命令
-git-sync check-auth
+# 检查依赖
 git-sync check-filter-repo
-git-sync version
+
+# 版本信息
+git-sync --version
 ```
 
 ## 配置示例
 
-```yaml
-version: 1
-
-settings:
-  state_dir: /app/state
-  repo_dir: /app/repos
-  default_schedule: "0 0 */7 * *"    # 每 7 天
-  timezone: "Asia/Shanghai"
-  max_concurrent: 5
-
-author_mappings:
-  - match_email: "alice@personal.com"
-    internal_name: "Alice Wang"
-    internal_email: "alice.wang@internal.corp"
-
-sync_tasks:
-  - name: production-services
-    repos:
-      - id: api-service
-        github_url: git@github.com:org/api-service.git
-        internal_url: git@git.internal.corp:mirrors/api-service.git
-        branches: ["main", "release/*"]
-        tags: true
-        auth:
-          type: ssh
-```
-
-## 认证方式
-
-### SSH（推荐）
-
-```yaml
-# docker-compose.yaml
-volumes:
-  - ~/.ssh/id_rsa:/app/.ssh/id_rsa:ro
-environment:
-  - GIT_SSH_COMMAND=ssh -i /app/.ssh/id_rsa
-```
-
-### HTTPS + Token
-
-```yaml
-environment:
-  - GITHUB_TOKEN=${GITHUB_TOKEN}
-```
-
-### HTTPS + 用户名密码
-
-```yaml
-environment:
-  - INTERNAL_USER=${INTERNAL_USER}
-  - INTERNAL_PASSWORD=${INTERNAL_PASSWORD}
-```
+见 `config_py/git-sync.yaml.example`
 
 ## 开发
 
 ```bash
-# 安装依赖
-npm install
+# 安装开发依赖
+pip install -e ".[dev]"
 
-# 编译
-npm run build
+# 运行测试
+pytest tests_py/
 
-# 开发模式
-npm run dev
+# 类型检查
+mypy src_py/git_sync
 
-# 测试
-npm test
+# 代码格式化
+ruff check src_py/
+```
 
-# 代码检查
-npm run lint
+## 打包说明
+
+```bash
+# 创建 hooks 目录
+mkdir -p hooks
+
+# 打包为单文件可执行文件
+pyinstaller build.spec --onefile --clean
+
+# 输出文件
+dist/git-sync  # 约 20-30MB
 ```
 
 ## 许可证
