@@ -1,43 +1,63 @@
-# Dependencies
-node_modules/
-package-lock.json
-
-# Build output
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
 dist/
-*.tsbuildinfo
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# Config (user-specific)
-config/git-sync.yaml
+# Virtual environments
+.venv/
+.venv_py/
+venv/
+ENV/
 
-# State data
-state/
-repos/
-
-# Logs
-logs/
-*.log
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
 
 # IDE
 .idea/
 .vscode/
 *.swp
 *.swo
+*~
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Ruff
+.ruff_cache/
+
+# Project specific
+state/
+repos/
+*.db
+*.log
+config/git-sync.yaml
+
+# PyInstaller
+*.manifest
 
 # OS
 .DS_Store
 Thumbs.db
-
-# Environment
-.env
-.env.local
-.env.*.local
-
-# Test
-coverage/
-.nyc_output/
-
-# Temporary
-*.tmp
-*.temp
-tmp/
-temp/

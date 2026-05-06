@@ -2,105 +2,101 @@
 
 ## Project Overview
 
-Syncs GitHub repos to internal Git server, rewriting commit author info (name/email) via `git-filter-repo`. TypeScript/Node.js CLI + Ink TUI.
-
-## Critical External Dependency
-
-**git-filter-repo** (Python CLI tool) is required for author rewriting. Not an npm package - installed via pip:
-
-```bash
-pip install git-filter-repo
-```
-
-Docker image includes it. Local dev requires manual install. Author rewrite calls this CLI via `execa`, not a JavaScript library.
+Syncs GitHub repos to internal Git server, rewriting commit author info (name/email) via git-filter-repo. Python CLI + Textual TUI.
 
 ## Architecture
 
 ```
-src/
-├── cli.ts              # Entry point (Commander)
-├── tui/                # Ink React components
-├── core/               # Business logic
-│   ├── git-operations.ts   # simple-git wrapper
-│   ├── author-rewrite.ts   # execa → git-filter-repo
-│   ├── state-manager.ts    # SQLite (better-sqlite3)
-│   └── scheduler.ts        # node-cron
-├── types/              # TypeScript interfaces
-└ utils/                # Helpers (mailmap generation, etc.)
+src/git_sync/
+├── cli.py              # Entry point (Click)
+├── core/
+│   ├── git_ops.py      # Git operations (subprocess)
+│   ├── author_rewrite.py  # git-filter-repo wrapper
+│   ├── state_manager.py   # SQLite (stdlib)
+│   └── scheduler.py       # APScheduler
+│   └── sync_engine.py     # Sync logic
+├── models/
+│   ├── config.py       # Pydantic config models
+│   ├── state.py        # State data models
+│   └ sync.py           # Sync result models
+├── tui/
+│   └ app.py            # Textual TUI
+└── utils/
+    ├── logger.py       # Rich logging
+    ├── retry.py        # Tenacity retry
+    └── mailmap.py      # Mailmap generation
 ```
 
 ## Key Technical Details
 
 | Aspect | Implementation |
 |--------|---------------|
-| Git ops | `simple-git` (wraps git CLI) |
-| Author rewrite | `execa('git-filter-repo', [...])` |
-| State | `better-sqlite3` (synchronous API) |
-| TUI | `ink` + `@inkjs/ui` (React components) |
-| Config | YAML via `js-yaml`, validated by `zod` |
+| Git ops | subprocess (git CLI) |
+| Author rewrite | git-filter-repo |
+| State | sqlite3 (stdlib) |
+| TUI | Textual |
+| Config | YAML via PyYAML, validated by Pydantic |
+| CLI | Click |
 
 ## Sync Flow (5 Phases)
 
-1. **Init** - Load config, verify git-filter-repo
-2. **Fetch** - Pull from GitHub via simple-git
-3. **Rewrite** - Generate `.mailmap`, run git-filter-repo
+1. **Init** - Load config, verify dependencies
+2. **Clone/Fetch** - Pull from GitHub via git CLI
+3. **Rewrite** - git-filter-repo author rewriting
 4. **Push** - Force push to internal (backup tag first)
-5. **Cleanup** - Update state DB, GC old worktrees
+5. **Cleanup** - Update state DB
 
 ## Author Mapping
 
-Matched by Git commit `author.email` (not GitHub username). Config supports:
+Matched by Git commit `author.email`. Config supports:
 - Global mappings (shared across repos)
 - Repo-local overrides (higher priority)
 
 ## Commands
 
 ```bash
-npm run build     # Compile TypeScript
-npm run dev       # Watch mode with tsx
-npm run daemon    # Start scheduled sync
-npm run tui       # Interactive dashboard
-npm test          # Vitest
+# Development
+pip install -e ".[dev]"
+pytest tests/
+ruff check src/
+
+# Build executable
+pyinstaller build.spec
+
+# Run
+git-sync daemon          # Start scheduler
+git-sync sync            # Manual sync
+git-sync status          # Show status
+git-sync tui             # Interactive TUI
+git-sync config validate # Validate config
 ```
 
-## Docker
+## System Requirements
 
-Multi-stage build: `node:20-slim` → compile → minimal runtime with git + python3 + git-filter-repo.
+- Python 3.10+
+- git CLI
+- git-filter-repo (pip install git-filter-repo)
 
-Volumes: `/app/config`, `/app/state`, `/app/repos`, `/app/.ssh`
+## Packaging
 
-## TypeScript Config
+PyInstaller single-file executable (~16MB):
+```bash
+pyinstaller build.spec
+# Output: dist/git-sync
+```
 
-- Module: `NodeNext` (ESM-style imports with `.js` extension required)
-- Path alias: `@/*` → `src/*`
-- JSX: `react-jsx` for Ink components
-
-## Development Requirements (MANDATORY)
+## Development Requirements
 
 ### Linting
-- **ESLint** for TypeScript (use flat config: `eslint.config.js`)
-- **PyRight** for Python (if Python code exists)
-- Run `npm run lint` before committing
-
-### Dependencies
-- Always use **latest stable versions** (check via Context7 before updating package.json)
-- Only downgrade if incompatible with Node.js 20+ runtime
+- **Ruff** for Python
+- Run `ruff check src/` before committing
 
 ### Testing
-- **Unit tests mandatory** for all new features
-- **Minimum coverage: 75%**
-- Run `npm test` before starting new work (verify previous features pass)
-- Run tests for current feature after implementation
+- **pytest** for all tests
+- Run `pytest tests/` before starting new work
 
 ### Development Workflow
-1. **Before new feature**: Run full test suite (`npm test`)
-2. **Implement feature**: Write code + unit tests
-3. **After implementation**: Run feature tests + lint
-4. **Before commit**: Run full test suite + typecheck
-
-### Test Commands
-```bash
-npm test                    # Run all tests
-npm test src/core/          # Run specific directory tests
-npm run test:coverage       # Run with coverage report
-```
+1. **Before new feature**: Run full test suite (`pytest tests/`)
+2. **Implement feature**: Write code + tests
+3. **After implementation**: Run tests + lint
+4. **Before commit**: Run full test suite

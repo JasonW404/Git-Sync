@@ -1,143 +1,53 @@
-# Git-Sync 配置文件示例
-# 复制此文件为 git-sync.yaml 并修改
-
 version: 1
 
-# 全局设置
 settings:
-  # 状态数据库目录
   state_dir: /app/state
-  
-  # 仓库工作目录
   repo_dir: /app/repos
-  
-  # 日志级别：DEBUG, INFO, WARN, ERROR
   log_level: INFO
-  
-  # 最大并行同步数
   max_concurrent: 5
-  
-  # 默认定时周期（cron 表达式）
-  # 每 7 天凌晨执行
   default_schedule: "0 0 */7 * *"
-  
-  # 时区
   timezone: "Asia/Shanghai"
-  
-  # 重试配置
-  retry:
-    max_attempts: 5
-    initial_delay: 1s
-    max_delay: 30s
-    factor: 2.0
-  
-  # 未映射作者处理策略
-  # warn: 警告但继续同步（不重写该作者）
-  # reject: 拒绝同步，需先添加映射
-  unmapped_author_policy: "warn"
+  unmapped_author_policy: warn
 
-# 全局作者映射（所有仓库共享）
-# 匹配依据：Git commit 中的 author.email
 author_mappings:
   - match_email: "alice@personal.com"
     internal_name: "Alice Wang"
     internal_email: "alice.wang@internal.corp"
-  
   - match_email: "bob@gmail.com"
     internal_name: "Bob Zhang"
     internal_email: "bob.zhang@internal.corp"
-  
-  - match_email: "contractor@agency.com"
-    internal_name: "Contractor Dev"
-    internal_email: "contractor.dev@internal.corp"
 
-# 同步任务组
 sync_tasks:
-  # 任务组1：生产服务仓库
   - name: production-services
-    description: "核心服务仓库，高频同步"
-    
-    # 可覆盖全局定时周期
-    schedule: "0 0 */7 * *"
-    
-    repos:
-      # 仓库1：API 服务
-      - id: api-service
-        # GitHub 仓库地址（SSH）
-        github_url: git@github.com:your-org/api-service.git
-        
-        # 内部仓库地址（SSH）
-        internal_url: git@git.internal.corp:mirrors/api-service.git
-        
-        # 要同步的分支
-        # 支持通配符：release/* 匹配所有 release 分支
-        # * 匹配所有分支
-        branches:
-          - main
-          - release/*
-        
-        # 是否同步 tags
-        tags: true
-        
-        # 克隆深度（0 = 完整历史）
-        depth: 0
-        
-        # 认证方式
-        auth:
-          type: ssh
-        
-        # 局部作者映射（覆盖全局）
-        # 如果与全局规则冲突，局部优先
-        # author_mappings:
-        #   - match_email: "alice@personal.com"
-        #     internal_name: "Alice Wang (API Team)"
-        #     internal_email: "alice.api@internal.corp
-      
-      # 仓库2：认证服务
-      - id: auth-service
-        github_url: git@github.com:your-org/auth-service.git
-        internal_url: git@git.internal.corp:mirrors/auth-service.git
-        branches:
-          - main
-          - develop
-        auth:
-          type: ssh
-  
-  # 任务组2：备份仓库
-  - name: backup-repos
-    description: "备份仓库，每日同步"
-    
-    # 每天凌晨 2 点
+    description: "Production service repositories"
     schedule: "0 2 * * *"
-    
     repos:
-      - id: legacy-system
-        github_url: git@github.com:your-org/legacy.git
-        internal_url: git@git.internal.corp:backup/legacy.git
-        
-        # 所有分支
-        branches:
-          - "*"
-        
-        # 完整历史
-        depth: 0
-        
+      - id: api-service
+        github_url: git@github.com:org/api-service.git
+        internal_url: git@git.internal.corp:mirrors/api-service.git
+        branches: ["main", "release/*"]
+        tags: true
         auth:
           type: ssh
 
-  # 任务组3：混合认证示例
-  # - name: mixed-auth-example
-  #   repos:
-  #     # GitHub 用 SSH，内部用 HTTPS 用户名密码
-  #     - id: special-repo
-  #       github_url: git@github.com:your-org/special.git
-  #       internal_url: https://git.internal.corp/mirrors/special.git
-  #       branches: ["main"]
-  #       auth:
-  #         type: mixed
-  #         github:
-  #           method: ssh
-  #         internal:
-  #           method: https
-  #           username: ${INTERNAL_USER}
-  #           password: ${INTERNAL_PASSWORD}
+      - id: web-frontend
+        github_url: git@github.com:org/web-frontend.git
+        internal_url: git@git.internal.corp:mirrors/web-frontend.git
+        branches: ["main", "develop"]
+        tags: false
+        auth:
+          type: ssh
+
+  - name: internal-tools
+    repos:
+      - id: admin-dashboard
+        github_url: git@github.com:org/admin-dashboard.git
+        internal_url: git@git.internal.corp:mirrors/admin-dashboard.git
+        branches: ["main"]
+        tags: true
+        auth:
+          type: ssh
+        author_mappings:
+          - match_email: "dev@contractor.com"
+            internal_name: "Contractor Dev"
+            internal_email: "contractor.dev@internal.corp"
