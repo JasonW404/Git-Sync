@@ -1,8 +1,8 @@
 version: 1
 
 settings:
-  state_dir: /app/state
-  repo_dir: /app/repos
+  state_dir: ./state
+  repo_dir: ./repos
   log_level: INFO
   max_concurrent: 5
   default_schedule: "0 0 */7 * *"
@@ -23,31 +23,48 @@ sync_tasks:
     schedule: "0 2 * * *"
     repos:
       - id: api-service
-        github_url: git@github.com:org/api-service.git
-        internal_url: git@git.internal.corp:mirrors/api-service.git
+        source:
+          url: git@github.com:org/api-service.git
+          ssh_private_key: ~/.ssh/id_rsa_github
+        destination:
+          url: git@git.internal.corp:mirrors/api-service.git
+          ssh_private_key: ~/.ssh/id_rsa_internal
         branches: ["main", "release/*"]
         tags: true
-        auth:
-          type: ssh
 
       - id: web-frontend
-        github_url: git@github.com:org/web-frontend.git
-        internal_url: git@git.internal.corp:mirrors/web-frontend.git
+        source:
+          url: https://github.com/org/web-frontend.git
+        destination:
+          url: https://git.internal.corp/mirrors/web-frontend.git
+          username: sync-bot
+          password: ${SYNC_PASSWORD}
         branches: ["main", "develop"]
         tags: false
-        auth:
-          type: ssh
 
   - name: internal-tools
     repos:
       - id: admin-dashboard
-        github_url: git@github.com:org/admin-dashboard.git
-        internal_url: git@git.internal.corp:mirrors/admin-dashboard.git
+        source:
+          url: ssh://git@github.com:org/admin-dashboard.git
+          ssh_private_key: ~/.ssh/id_ed25519
+        destination:
+          url: https://git.internal.corp/mirrors/admin-dashboard.git
+          username: admin
+          password: ${ADMIN_PASSWORD}
         branches: ["main"]
         tags: true
-        auth:
-          type: ssh
         author_mappings:
           - match_email: "dev@contractor.com"
             internal_name: "Contractor Dev"
             internal_email: "contractor.dev@internal.corp"
+
+  - name: legacy-format-demo
+    repos:
+      - id: legacy-repo
+        github_url: git@github.com:org/legacy-repo.git
+        internal_url: git@git.internal.corp:mirrors/legacy-repo.git
+        branches: ["main"]
+        tags: false
+        auth:
+          type: ssh
