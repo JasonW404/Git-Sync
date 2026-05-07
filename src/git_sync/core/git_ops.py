@@ -3,6 +3,13 @@ from pathlib import Path
 from typing import NamedTuple
 
 
+class GitError(Exception):
+    def __init__(self, message: str, stderr: str = "", stdout: str = ""):
+        super().__init__(message)
+        self.stderr = stderr
+        self.stdout = stdout
+
+
 class CommitInfo(NamedTuple):
     hash: str
     author_name: str
@@ -19,13 +26,22 @@ class GitOperations:
         self.work_dir.mkdir(parents=True, exist_ok=True)
 
     def _run_git(self, *args: str, check: bool = True) -> subprocess.CompletedProcess:
-        return subprocess.run(
+        result = subprocess.run(
             ["git"] + list(args),
             cwd=self.work_dir,
             capture_output=True,
             text=True,
-            check=check,
+            check=False,
         )
+        if check and result.returncode != 0:
+            cmd_str = "git " + " ".join(args)
+            error_msg = f"Git command failed: {cmd_str}"
+            if result.stderr:
+                error_msg += f"\nStderr: {result.stderr}"
+            if result.stdout:
+                error_msg += f"\nStdout: {result.stdout}"
+            raise GitError(error_msg, stderr=result.stderr, stdout=result.stdout)
+        return result
 
     def clone(self, url: str, local_path: str | Path, depth: int = 0, full: bool = False) -> None:
         args = ["clone"]

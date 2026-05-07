@@ -1,9 +1,10 @@
 import subprocess
+import time
 from collections.abc import Callable
 from pathlib import Path
 
 from git_sync.core.author_rewrite import AuthorRewriter
-from git_sync.core.git_ops import GitOperations, filter_branches, prepare_url_for_clone
+from git_sync.core.git_ops import GitError, GitOperations, filter_branches, prepare_url_for_clone
 from git_sync.core.state_manager import InMemoryStateManager, StateManager
 from git_sync.models.config import AuthorMapping, RepoConfig, Settings
 from git_sync.models.state import SyncLog
@@ -33,8 +34,6 @@ class SyncEngine:
             self.on_progress(SyncProgress(phase=phase, progress=progress, message=message))
 
     def sync(self) -> SyncResult:
-        import time
-
         start_time = time.time()
         repo_id = self.repo_config.id
         repo_work_dir = self.work_dir / repo_id
@@ -61,11 +60,18 @@ class SyncEngine:
                 )
 
                 repo_work_dir.parent.mkdir(parents=True, exist_ok=True)
-                subprocess.run(
+
+                clone_result = subprocess.run(
                     ["git", "clone", github_url, str(repo_work_dir)],
-                    check=True,
                     capture_output=True,
+                    text=True,
                 )
+
+                if clone_result.returncode != 0:
+                    error_msg = f"Clone failed from {github_url}"
+                    if clone_result.stderr:
+                        error_msg += f"\n{clone_result.stderr}"
+                    raise RuntimeError(error_msg)
 
             self._update_progress("fetching", 20, "Fetching from GitHub")
             self.state_manager.upsert_sync_state(
@@ -76,7 +82,11 @@ class SyncEngine:
             )
 
             git_ops = GitOperations(repo_work_dir)
-            git_ops.fetch_all()
+
+            try:
+                git_ops.fetch_all()
+            except GitError as e:
+                raise RuntimeError(f"Fetch failed: {e.stderr}") from e
 
             branches = git_ops.get_branches("origin")
             branches_to_sync = filter_branches(branches, self.repo_config.branches)

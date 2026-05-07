@@ -7,6 +7,7 @@ from git_sync.models.config import AuthorMapping
 
 try:
     import git_filter_repo
+
     HAS_GIT_FILTER_REPO = True
 except ImportError:
     HAS_GIT_FILTER_REPO = False
@@ -40,6 +41,7 @@ class AuthorRewriter:
                 try:
                     sys.argv = ["git-filter-repo"] + args
                     import os
+
                     os.chdir(self.repo_path)
                     git_filter_repo.main()
                 finally:
