@@ -42,6 +42,16 @@ sync_tasks:
         branches: ["main", "develop"]
         tags: false
 
+      - id: open-source-mirror
+        source:
+          url: https://github.com/public-org/open-source-project.git
+        destination:
+          url: https://git.internal.corp/mirrors/open-source-project.git
+          username: sync-bot
+          password: ${SYNC_PASSWORD}
+        branches: ["main"]
+        tags: true
+
   - name: internal-tools
     repos:
       - id: admin-dashboard
