@@ -24,7 +24,7 @@ def find_repo(sync_tasks: list[SyncTaskGroup], repo_id: str) -> RepoConfig | Non
 
 
 @click.group()
-@click.version_option(version="1.0.5", prog_name="git-sync")
+@click.version_option(version="1.0.6", prog_name="git-sync")
 @click.option(
     "-c",
     "--config",
