@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build-and-release:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     
     steps:
       - name: Checkout code
@@ -59,8 +59,11 @@ jobs:
           cat > release_notes.md << EOF
           ## System Requirements
           
-          - Ubuntu 20.04+ / Debian 11+ (GLIBC 2.31+)
+          - Ubuntu 22.04+ / Debian 12+ (GLIBC 2.35+)
           - git CLI (required)
+          
+          Note: Built on Ubuntu 22.04 for better compatibility.
+          For older systems (Ubuntu 20.04 / Debian 11), contact maintainers.
           
           ## Installation
           
