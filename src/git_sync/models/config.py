@@ -108,16 +108,14 @@ class RepoEndpointConfig(BaseModel):
         is_https = url.startswith("https://") or url.startswith("http://")
 
         if is_ssh:
-            # SSH URLs should not have username/password
             if self.username or self.password:
                 raise ValueError(
                     "SSH URLs cannot use username/password auth, use ssh_private_key instead"
                 )
         elif is_https:
-            # HTTPS URLs can have username/password, warn if ssh_private_key is set
-            if self.ssh_private_key and not (self.username or self.password):
+            if self.ssh_private_key:
                 raise ValueError(
-                    "HTTPS URLs with ssh_private_key should also specify username/password"
+                    "HTTPS URLs cannot use ssh_private_key, use username/password instead"
                 )
         return self
 
