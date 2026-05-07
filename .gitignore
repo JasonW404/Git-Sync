@@ -5,15 +5,10 @@ __pycache__/
 *.so
 .Python
 build/
-develop-eggs/
 dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
 sdist/
+release/*.tar.gz
+release/git-sync-*
 var/
 wheels/
 *.egg-info/
