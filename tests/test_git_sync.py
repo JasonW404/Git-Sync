@@ -107,11 +107,11 @@ sync_tasks:
   - name: test-group
     repos:
       - id: test-repo
-        github_url: git@github.com:test/test.git
-        internal_url: git@internal:test/test.git
+        source:
+          url: git@github.com:test/test.git
+        destination:
+          url: git@internal:test/test.git
         branches: ["main"]
-        auth:
-          type: ssh
 """
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
@@ -124,5 +124,7 @@ sync_tasks:
             assert config.settings.state_dir == "/tmp/state"
             assert len(config.sync_tasks) == 1
             assert config.sync_tasks[0].repos[0].id == "test-repo"
+            assert config.sync_tasks[0].repos[0].source.url == "git@github.com:test/test.git"
+            assert config.sync_tasks[0].repos[0].destination.url == "git@internal:test/test.git"
 
             Path(f.name).unlink()

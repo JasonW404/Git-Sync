@@ -58,13 +58,3 @@ sync_tasks:
           - match_email: "dev@contractor.com"
             internal_name: "Contractor Dev"
             internal_email: "contractor.dev@internal.corp"
-
-  - name: legacy-format-demo
-    repos:
-      - id: legacy-repo
-        github_url: git@github.com:org/legacy-repo.git
-        internal_url: git@git.internal.corp:mirrors/legacy-repo.git
-        branches: ["main"]
-        tags: false
-        auth:
-          type: ssh

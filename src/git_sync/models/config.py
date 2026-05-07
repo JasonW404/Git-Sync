@@ -141,47 +141,6 @@ class RepoConfig(BaseModel):
     depth: int = Field(default=0, ge=0)
     author_mappings: list[AuthorMapping] = Field(default_factory=list)
 
-    # Legacy compatibility: keep github_url/internal_url for backward compat
-    github_url: str | None = None
-    internal_url: str | None = None
-    auth: dict | None = None
-
-    @model_validator(mode="before")
-    @classmethod
-    def migrate_legacy_config(cls, data: dict) -> dict:
-        """Migrate legacy github_url/internal_url/auth to source/destination."""
-        if "source" not in data and "github_url" in data:
-            # Legacy format detected, migrate to new format
-            github_url = data.pop("github_url", "")
-            internal_url = data.pop("internal_url", "")
-            auth = data.pop("auth", {})
-
-            # Determine auth type and build endpoint configs
-            auth_type = auth.get("type", "ssh")
-            is_ssh = auth_type == "ssh"
-
-            source_endpoint = {"url": github_url}
-            if is_ssh:
-                # Check if there's SSH key config in auth.github or auth.internal
-                github_auth = auth.get("github", {})
-                if github_auth.get("ssh_private_key"):
-                    source_endpoint["ssh_private_key"] = github_auth["ssh_private_key"]
-
-            dest_endpoint = {"url": internal_url}
-            if is_ssh:
-                internal_auth = auth.get("internal", {})
-                if internal_auth.get("ssh_private_key"):
-                    dest_endpoint["ssh_private_key"] = internal_auth["ssh_private_key"]
-            else:
-                internal_auth = auth.get("internal", {})
-                dest_endpoint["username"] = internal_auth.get("username")
-                dest_endpoint["password"] = internal_auth.get("password")
-
-            data["source"] = source_endpoint
-            data["destination"] = dest_endpoint
-
-        return data
-
 
 class SyncTaskGroup(BaseModel):
     name: str = Field(min_length=1)
