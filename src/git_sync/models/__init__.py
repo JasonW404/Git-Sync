@@ -1,9 +1,9 @@
 from git_sync.models.config import (
-    AuthConfig,
     AuthorMapping,
     GitSyncConfig,
     LogLevel,
     RepoConfig,
+    RepoEndpointConfig,
     Settings,
     SyncTaskGroup,
 )
@@ -15,8 +15,8 @@ __all__ = [
     "Settings",
     "AuthorMapping",
     "RepoConfig",
+    "RepoEndpointConfig",
     "SyncTaskGroup",
-    "AuthConfig",
     "LogLevel",
     "SyncState",
     "CommitMapping",

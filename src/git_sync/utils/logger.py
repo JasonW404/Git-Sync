@@ -14,43 +14,53 @@ class LogLevel(str, Enum):
 
 _console = Console()
 _current_level = LogLevel.INFO
+_logger: logging.Logger | None = None
 
 
 def set_log_level(level: LogLevel) -> None:
-    global _current_level
+    global _current_level, _logger
     _current_level = level
-    logging.getLogger().setLevel(level.value)
+    if _logger:
+        _logger.setLevel(level.value)
+    logging.getLogger("git_sync").setLevel(level.value)
 
 
 def get_logger(name: str = "git_sync") -> logging.Logger:
+    global _logger
     logger = logging.getLogger(name)
     if not logger.handlers:
-        handler = RichHandler(console=_console, show_time=False, show_path=False)
+        handler = RichHandler(
+            console=_console,
+            show_time=True,
+            show_path=True,
+            rich_tracebacks=True,
+        )
         handler.setFormatter(logging.Formatter("%(message)s"))
         logger.addHandler(handler)
         logger.setLevel(_current_level.value)
+        _logger = logger
     return logger
 
 
 def debug(message: str) -> None:
-    _console.print(f"[dim][DEBUG] {message}[/dim]")
+    get_logger().debug(message)
 
 
 def info(message: str) -> None:
-    _console.print(f"[blue][INFO] {message}[/blue]")
+    get_logger().info(message)
 
 
 def warn(message: str) -> None:
-    _console.print(f"[yellow][WARN] {message}[/yellow]")
+    get_logger().warning(message)
 
 
 def error(message: str) -> None:
-    _console.print(f"[red][ERROR] {message}[/red]")
+    get_logger().error(message)
 
 
 def success(message: str) -> None:
-    _console.print(f"[green]✓ {message}[/green]")
+    get_logger().info(f"✓ {message}")
 
 
 def progress(message: str) -> None:
-    _console.print(f"[cyan]◐ {message}[/cyan]")
+    get_logger().debug(f"◐ {message}")

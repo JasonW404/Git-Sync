@@ -1,6 +1,16 @@
+import os
 import subprocess
 from pathlib import Path
 from typing import NamedTuple
+
+from git_sync.utils.logger import get_logger
+
+
+class GitError(Exception):
+    def __init__(self, message: str, stderr: str = "", stdout: str = ""):
+        super().__init__(message)
+        self.stderr = stderr
+        self.stdout = stdout
 
 
 class CommitInfo(NamedTuple):
@@ -14,18 +24,37 @@ class CommitInfo(NamedTuple):
 
 
 class GitOperations:
-    def __init__(self, work_dir: str | Path):
+    def __init__(self, work_dir: str | Path, env: dict | None = None):
         self.work_dir = Path(work_dir)
         self.work_dir.mkdir(parents=True, exist_ok=True)
+        self.env = env or {}
 
     def _run_git(self, *args: str, check: bool = True) -> subprocess.CompletedProcess:
-        return subprocess.run(
-            ["git"] + list(args),
+        logger = get_logger()
+        cmd = ["git"] + list(args)
+        logger.debug(f"Running: {' '.join(cmd)}")
+
+        merged_env = os.environ.copy()
+        merged_env.update(self.env)
+
+        result = subprocess.run(
+            cmd,
             cwd=self.work_dir,
             capture_output=True,
             text=True,
-            check=check,
+            check=False,
+            env=merged_env,
         )
+        if check and result.returncode != 0:
+            cmd_str = "git " + " ".join(args)
+            error_msg = f"Git command failed: {cmd_str}"
+            if result.stderr:
+                error_msg += f"\nStderr: {result.stderr}"
+            if result.stdout:
+                error_msg += f"\nStdout: {result.stdout}"
+            logger.error(error_msg)
+            raise GitError(error_msg, stderr=result.stderr, stdout=result.stdout)
+        return result
 
     def clone(self, url: str, local_path: str | Path, depth: int = 0, full: bool = False) -> None:
         args = ["clone"]
@@ -169,22 +198,35 @@ class GitOperations:
         return result.stdout.strip()
 
 
-def prepare_url_for_clone(repo_config, is_github: bool) -> str:
-    url = repo_config.github_url if is_github else repo_config.internal_url
+def prepare_url_for_clone(endpoint_config, is_source: bool = True) -> tuple[str, dict]:
+    """
+    Prepare URL and environment for git clone/fetch/push operations.
 
-    if repo_config.auth.type == "ssh":
-        return url
+    Returns:
+        tuple: (prepared_url, env_dict) where env_dict contains GIT_SSH_COMMAND for SSH
+    """
+    url = endpoint_config.url
+    env = {}
 
-    auth = repo_config.auth.github if is_github else repo_config.auth.internal
-    if auth and auth.method == "https":
-        if auth.token:
+    if endpoint_config.is_ssh:
+        ssh_key = endpoint_config.ssh_private_key
+        if ssh_key:
+            ssh_key_path = Path(ssh_key).expanduser().resolve()
+            env["GIT_SSH_COMMAND"] = (
+                f"ssh -i {ssh_key_path} -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
+            )
+        return url, env
+
+    if endpoint_config.is_https:
+        username = endpoint_config.username
+        password = endpoint_config.password
+        if username and password:
             if url.startswith("https://"):
-                return url.replace("https://", f"https://{auth.token}@")
-        elif auth.username and getattr(auth, "password", None):
-            if url.startswith("https://"):
-                return url.replace("https://", f"https://{auth.username}:{auth.password}@")
+                return url.replace("https://", f"https://{username}:{password}@"), env
+            elif url.startswith("http://"):
+                return url.replace("http://", f"http://{username}:{password}@"), env
 
-    return url
+    return url, env
 
 
 def filter_branches(available: list[str], patterns: list[str]) -> list[str]:

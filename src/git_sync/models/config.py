@@ -1,9 +1,10 @@
+import os
 import re
 from enum import Enum
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class LogLevel(str, Enum):
@@ -26,8 +27,8 @@ class RetryConfig(BaseModel):
 
 
 class Settings(BaseModel):
-    state_dir: str = Field(default="/app/state")
-    repo_dir: str = Field(default="/app/repos")
+    state_dir: str = Field(default="./state")
+    repo_dir: str = Field(default="./repos")
     log_level: LogLevel = Field(default=LogLevel.INFO)
     max_concurrent: int = Field(default=5, ge=1, le=10)
     default_schedule: str = Field(default="0 0 */7 * *")
@@ -50,56 +51,27 @@ class AuthorMapping(BaseModel):
         return v
 
 
-class AuthMethod(str, Enum):
-    SSH = "ssh"
-    HTTPS = "https"
+class RepoEndpointConfig(BaseModel):
+    """Configuration for a repository endpoint (source or destination)."""
 
+    url: str
+    ssh_private_key: str | None = None  # For SSH connections
+    username: str | None = None  # For HTTPS connections
+    password: str | None = None  # For HTTPS connections (can be env var like ${VAR})
 
-class AuthType(str, Enum):
-    SSH = "ssh"
-    HTTPS = "https"
-    MIXED = "mixed"
-
-
-class GitHubAuth(BaseModel):
-    method: AuthMethod | None = None
-    token: str | None = None
-    username: str | None = None
-
-
-class InternalAuth(BaseModel):
-    method: AuthMethod | None = None
-    token: str | None = None
-    username: str | None = None
-    password: str | None = None
-
-
-class AuthConfig(BaseModel):
-    type: AuthType
-    github: GitHubAuth | None = None
-    internal: InternalAuth | None = None
-
-
-class RepoConfig(BaseModel):
-    id: str = Field(min_length=1)
-    github_url: str
-    internal_url: str
-    branches: list[str] = Field(min_length=1)
-    tags: bool = Field(default=False)
-    depth: int = Field(default=0, ge=0)
-    auth: AuthConfig
-    author_mappings: list[AuthorMapping] = Field(default_factory=list)
-
-    @field_validator("github_url", "internal_url")
+    @field_validator("url")
     @classmethod
     def validate_git_url(cls, v: str) -> str:
+        """Validate Git URL format (SSH or HTTPS)."""
         if v.startswith("/"):
-            return v
-        if v.startswith("git@"):
-            ssh_pattern = r"^git@[a-zA-Z0-9.-]+:[a-zA-Z0-9._/-]+(\.git)?$"
+            return v  # Local path
+        # SSH format: git@host:path or ssh://git@host/path
+        if v.startswith("git@") or v.startswith("ssh://"):
+            ssh_pattern = r"^(ssh://)?git@[a-zA-Z0-9._-]+(:[0-9]+)?[:/][a-zA-Z0-9._/-]+(\.git)?$"
             if not re.match(ssh_pattern, v):
                 raise ValueError(f"Invalid SSH URL: {v}")
             return v
+        # HTTPS format
         if v.startswith("https://") or v.startswith("http://"):
             try:
                 from urllib.parse import urlparse
@@ -108,7 +80,66 @@ class RepoConfig(BaseModel):
             except Exception:
                 raise ValueError(f"Invalid HTTPS URL: {v}")
             return v
-        raise ValueError(f"Invalid Git URL: {v}")
+        raise ValueError(
+            f"Invalid Git URL: {v}. Must be SSH (git@host:path) or HTTPS (https://host/path)"
+        )
+
+    @field_validator("password")
+    @classmethod
+    def resolve_env_var(cls, v: str | None) -> str | None:
+        """Resolve environment variable references like ${VAR}."""
+        if v is None:
+            return None
+        env_pattern = r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}"
+        match = re.match(env_pattern, v)
+        if match:
+            env_var = match.group(1)
+            resolved = os.environ.get(env_var)
+            if resolved is None:
+                raise ValueError(f"Environment variable {env_var} not set")
+            return resolved
+        return v
+
+    @model_validator(mode="after")
+    def validate_auth_params(self) -> "RepoEndpointConfig":
+        """Validate that auth params match the URL protocol."""
+        url = self.url
+        is_ssh = url.startswith("git@") or url.startswith("ssh://")
+        is_https = url.startswith("https://") or url.startswith("http://")
+
+        if is_ssh:
+            # SSH URLs should not have username/password
+            if self.username or self.password:
+                raise ValueError(
+                    "SSH URLs cannot use username/password auth, use ssh_private_key instead"
+                )
+        elif is_https:
+            # HTTPS URLs can have username/password, warn if ssh_private_key is set
+            if self.ssh_private_key and not (self.username or self.password):
+                raise ValueError(
+                    "HTTPS URLs with ssh_private_key should also specify username/password"
+                )
+        return self
+
+    @property
+    def is_ssh(self) -> bool:
+        """Check if URL uses SSH protocol."""
+        return self.url.startswith("git@") or self.url.startswith("ssh://")
+
+    @property
+    def is_https(self) -> bool:
+        """Check if URL uses HTTPS protocol."""
+        return self.url.startswith("https://") or self.url.startswith("http://")
+
+
+class RepoConfig(BaseModel):
+    id: str = Field(min_length=1)
+    source: RepoEndpointConfig
+    destination: RepoEndpointConfig
+    branches: list[str] = Field(min_length=1)
+    tags: bool = Field(default=False)
+    depth: int = Field(default=0, ge=0)
+    author_mappings: list[AuthorMapping] = Field(default_factory=list)
 
 
 class SyncTaskGroup(BaseModel):

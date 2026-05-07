@@ -1,13 +1,16 @@
+import os
 import subprocess
+import time
 from collections.abc import Callable
 from pathlib import Path
 
 from git_sync.core.author_rewrite import AuthorRewriter
-from git_sync.core.git_ops import GitOperations, filter_branches, prepare_url_for_clone
+from git_sync.core.git_ops import GitError, GitOperations, filter_branches, prepare_url_for_clone
 from git_sync.core.state_manager import InMemoryStateManager, StateManager
 from git_sync.models.config import AuthorMapping, RepoConfig, Settings
 from git_sync.models.state import SyncLog
 from git_sync.models.sync import SyncProgress, SyncResult, SyncStatus
+from git_sync.utils.logger import get_logger
 
 
 class SyncEngine:
@@ -33,13 +36,13 @@ class SyncEngine:
             self.on_progress(SyncProgress(phase=phase, progress=progress, message=message))
 
     def sync(self) -> SyncResult:
-        import time
-
+        logger = get_logger()
         start_time = time.time()
         repo_id = self.repo_config.id
         repo_work_dir = self.work_dir / repo_id
 
         try:
+            logger.info(f"Starting sync for repo: {repo_id}")
             self._update_progress("init", 0, "Starting sync")
             self.state_manager.upsert_sync_state(
                 {
@@ -49,10 +52,12 @@ class SyncEngine:
             )
 
             rewriter = AuthorRewriter(repo_work_dir)
-            github_url = prepare_url_for_clone(self.repo_config, is_github=True)
+            source_url, source_env = prepare_url_for_clone(self.repo_config.source, is_source=True)
+            logger.debug(f"Source URL: {source_url}")
 
             if not (repo_work_dir / ".git").exists():
-                self._update_progress("cloning", 10, "Cloning from GitHub")
+                self._update_progress("cloning", 10, "Cloning from source")
+                logger.info(f"Cloning from {source_url}")
                 self.state_manager.upsert_sync_state(
                     {
                         "repo_id": repo_id,
@@ -61,13 +66,28 @@ class SyncEngine:
                 )
 
                 repo_work_dir.parent.mkdir(parents=True, exist_ok=True)
-                subprocess.run(
-                    ["git", "clone", github_url, str(repo_work_dir)],
-                    check=True,
+
+                merged_env = os.environ.copy()
+                merged_env.update(source_env)
+
+                clone_result = subprocess.run(
+                    ["git", "clone", source_url, str(repo_work_dir)],
                     capture_output=True,
+                    text=True,
+                    env=merged_env,
                 )
 
-            self._update_progress("fetching", 20, "Fetching from GitHub")
+                if clone_result.returncode != 0:
+                    error_msg = f"Clone failed from {source_url}"
+                    if clone_result.stderr:
+                        error_msg += f"\n{clone_result.stderr}"
+                    logger.error(error_msg)
+                    raise RuntimeError(error_msg)
+
+                logger.info(f"Clone successful for {repo_id}")
+
+            self._update_progress("fetching", 20, "Fetching from source")
+            logger.info("Fetching all branches")
             self.state_manager.upsert_sync_state(
                 {
                     "repo_id": repo_id,
@@ -75,22 +95,33 @@ class SyncEngine:
                 }
             )
 
-            git_ops = GitOperations(repo_work_dir)
-            git_ops.fetch_all()
+            git_ops = GitOperations(repo_work_dir, env=source_env)
+
+            try:
+                git_ops.fetch_all()
+            except GitError as e:
+                logger.error(f"Fetch failed: {e.stderr}")
+                raise RuntimeError(f"Fetch failed: {e.stderr}") from e
 
             branches = git_ops.get_branches("origin")
             branches_to_sync = filter_branches(branches, self.repo_config.branches)
+            logger.debug(f"Branches to sync: {branches_to_sync}")
 
             self._update_progress("checking", 40, "Checking unmapped authors")
+            logger.info("Checking for unmapped authors")
 
             unmapped = rewriter.detect_unmapped_authors(self.merged_mappings)
             if unmapped:
                 if self.settings.unmapped_author_policy == "reject":
+                    logger.error(f"Unmapped authors found: {', '.join(unmapped)}")
                     raise RuntimeError(f"Unmapped authors found: {', '.join(unmapped)}")
                 else:
-                    print(f"[WARN] Unmapped authors (will not be rewritten): {', '.join(unmapped)}")
+                    logger.warning(
+                        f"Unmapped authors (will not be rewritten): {', '.join(unmapped)}"
+                    )
 
             self._update_progress("rewriting", 60, "Rewriting author information")
+            logger.info("Rewriting author information")
             self.state_manager.upsert_sync_state(
                 {
                     "repo_id": repo_id,
@@ -99,8 +130,10 @@ class SyncEngine:
             )
 
             rewriter.rewrite_authors(self.merged_mappings, force=True)
+            logger.info("Author rewriting complete")
 
-            self._update_progress("pushing", 80, "Pushing to internal repository")
+            self._update_progress("pushing", 80, "Pushing to destination")
+            logger.info("Preparing push to destination")
             self.state_manager.upsert_sync_state(
                 {
                     "repo_id": repo_id,
@@ -108,22 +141,35 @@ class SyncEngine:
                 }
             )
 
-            internal_url = prepare_url_for_clone(self.repo_config, is_github=False)
+            dest_url, dest_env = prepare_url_for_clone(
+                self.repo_config.destination, is_source=False
+            )
+            logger.debug(f"Destination URL: {dest_url}")
 
-            remotes = git_ops.get_remotes()
+            git_ops_push = GitOperations(repo_work_dir, env=dest_env)
+
+            remotes = git_ops_push.get_remotes()
             has_internal = any(r["name"] == "internal" for r in remotes)
 
             if not has_internal:
-                git_ops.add_remote("internal", internal_url)
+                git_ops_push.add_remote("internal", dest_url)
+                logger.debug("Added internal remote")
+            else:
+                git_ops_push.remove_remote("internal")
+                git_ops_push.add_remote("internal", dest_url)
+                logger.debug("Updated internal remote")
 
-            git_ops.push_all("internal", force=True)
+            git_ops_push.push_all("internal", force=True)
+            logger.info("Pushed all branches to destination")
 
             if self.repo_config.tags:
-                git_ops.push_tags("internal")
+                git_ops_push.push_tags("internal")
+                logger.info("Pushed tags to destination")
 
-            current_hash = git_ops.get_current_hash()
+            current_hash = git_ops_push.get_current_hash()
 
             self._update_progress("complete", 100, "Sync complete")
+            logger.info(f"Sync complete for {repo_id}")
             self.state_manager.upsert_sync_state(
                 {
                     "repo_id": repo_id,
@@ -164,8 +210,7 @@ class SyncEngine:
             return result
 
         except Exception as e:
-            import time
-
+            logger.error(f"Sync failed for {repo_id}: {e}")
             end_time = time.time()
             error_message = str(e)
 
