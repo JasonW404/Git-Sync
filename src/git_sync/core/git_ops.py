@@ -213,7 +213,7 @@ def prepare_url_for_clone(endpoint_config, is_source: bool = True) -> tuple[str,
         if ssh_key:
             ssh_key_path = Path(ssh_key).expanduser().resolve()
             env["GIT_SSH_COMMAND"] = (
-                f"ssh -i {ssh_key_path} -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
+                f'ssh -i "{ssh_key_path}" -o IdentitiesOnly=yes -o StrictHostKeyChecking=no'
             )
         return url, env
 
