@@ -117,8 +117,10 @@ sync_tasks:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write(config_content)
             f.flush()
+            config_path = f.name
 
-            config = load_config(f.name)
+        try:
+            config = load_config(config_path)
 
             assert config.version == 1
             assert config.settings.state_dir == "/tmp/state"
@@ -126,5 +128,5 @@ sync_tasks:
             assert config.sync_tasks[0].repos[0].id == "test-repo"
             assert config.sync_tasks[0].repos[0].source.url == "git@github.com:test/test.git"
             assert config.sync_tasks[0].repos[0].destination.url == "git@internal:test/test.git"
-
-            Path(f.name).unlink()
+        finally:
+            Path(config_path).unlink()
