@@ -13,12 +13,7 @@ from git_sync.models.config import LogLevel, RepoConfig, SyncTaskGroup, load_con
 from git_sync.utils.logger import get_logger, set_log_level
 
 IS_WINDOWS = platform.system() == "Windows"
-
-if IS_WINDOWS:
-    DEFAULT_CONFIG_PATH = str(Path.home() / ".git-sync" / "config.yaml")
-else:
-    DEFAULT_CONFIG_PATH = "/etc/git-sync/config.yaml"
-
+DEFAULT_CONFIG_PATH = "./config.yaml"
 console = Console()
 
 

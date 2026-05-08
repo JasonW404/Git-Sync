@@ -27,8 +27,8 @@ class RetryConfig(BaseModel):
 
 
 class Settings(BaseModel):
-    state_dir: str = Field(default="./state")
-    repo_dir: str = Field(default="./repos")
+    state_dir: str = Field(default="./data/state")
+    repo_dir: str = Field(default="./data/repos")
     log_level: LogLevel = Field(default=LogLevel.INFO)
     max_concurrent: int = Field(default=5, ge=1, le=10)
     default_schedule: str = Field(default="0 0 */7 * *")

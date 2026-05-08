@@ -27,8 +27,8 @@ class TestConfigModels:
 
     def test_settings_defaults(self):
         settings = Settings()
-        assert settings.state_dir == "./state"
-        assert settings.repo_dir == "./repos"
+        assert settings.state_dir == "./data/state"
+        assert settings.repo_dir == "./data/repos"
         assert settings.log_level == "INFO"
         assert settings.max_concurrent == 5
 

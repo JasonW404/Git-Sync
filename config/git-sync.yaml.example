@@ -1,8 +1,8 @@
 version: 1
 
 settings:
-  state_dir: ./state
-  repo_dir: ./repos
+  state_dir: ./data/state
+  repo_dir: ./data/repos
   log_level: INFO
   max_concurrent: 5
   default_schedule: "0 0 */7 * *"

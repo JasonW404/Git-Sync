@@ -145,7 +145,10 @@ jobs:
           
           Note: Built on Ubuntu 22.04 / Windows Server for compatibility.
           
-          ## Installation
+## Installation
+          
+          All paths are relative to the working directory.
+          No root/admin privileges required.
           
           ### Linux
           
@@ -156,14 +159,52 @@ jobs:
           # Extract
           tar -xzf git-sync-${VERSION}-linux-x86_64.tar.gz
           
-          # Setup
-          sudo mkdir -p /etc/git-sync
-          sudo cp git-sync.yaml.example /etc/git-sync/config.yaml
-          sudo nano /etc/git-sync/config.yaml
+          # Create working directory
+          mkdir -p my-sync
+          cd my-sync
           
-          # Run
-          ./git-sync-${VERSION}-linux-x86_64 sync
+          # Copy config example
+          cp ../git-sync.yaml.example ./config.yaml
+          
+          # Edit config
+          nano config.yaml
+          
+          # Run (all data stored in ./data/)
+          ../git-sync-${VERSION}-linux-x86_64 sync
           ```
+          
+          ### Windows
+          
+          ```powershell
+          # Download
+          Invoke-WebRequest -Uri "https://github.com/${{ github.repository }}/releases/download/v${VERSION}/git-sync-${VERSION}-windows-x86_64.zip" -OutFile "git-sync.zip"
+          
+          # Extract
+          Expand-Archive -Path "git-sync.zip" -DestinationPath "."
+          
+          # Create working directory
+          mkdir my-sync
+          cd my-sync
+          
+          # Copy config example
+          copy ..\git-sync.yaml.example config.yaml
+          
+          # Edit config
+          notepad config.yaml
+          
+          # Run (all data stored in .\data\)
+          ..\git-sync-${VERSION}-windows-x86_64.exe sync
+          ```
+          
+          ## Default Paths
+          
+          | Path | Default | Description |
+          |------|---------|-------------|
+          | Config file | `./config.yaml` | Configuration file |
+          | State dir | `./data/state` | Sync state database |
+          | Repo dir | `./data/repos` | Local repo clones |
+          
+          Override with `-c/--config` CLI option or in `settings:` section.
           
           ### Windows
           
