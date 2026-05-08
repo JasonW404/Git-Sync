@@ -132,7 +132,8 @@ jobs:
       - name: Generate release notes
         run: |
           VERSION=${{ steps.get_version.outputs.version }}
-          cat > release_notes.md << 'EOF'
+          REPO=${{ github.repository }}
+          cat > release_notes.md << HEREDOC
           ## System Requirements
           
           **Linux:**
@@ -145,113 +146,77 @@ jobs:
           
           Note: Built on Ubuntu 22.04 / Windows Server for compatibility.
           
-## Installation
+          ## Installation
           
-          All paths are relative to the working directory.
-          No root/admin privileges required.
+          All paths are relative to the working directory. No root/admin required.
           
           ### Linux
           
-          ```bash
+          \`\`\`bash
           # Download
-          wget https://github.com/${{ github.repository }}/releases/download/v${VERSION}/git-sync-${VERSION}-linux-x86_64.tar.gz
+          wget https://github.com/${REPO}/releases/download/v${VERSION}/git-sync-${VERSION}-linux-x86_64.tar.gz
           
           # Extract
           tar -xzf git-sync-${VERSION}-linux-x86_64.tar.gz
           
           # Create working directory
-          mkdir -p my-sync
-          cd my-sync
+          mkdir -p my-sync && cd my-sync
           
-          # Copy config example
+          # Copy config
           cp ../git-sync.yaml.example ./config.yaml
           
           # Edit config
           nano config.yaml
           
-          # Run (all data stored in ./data/)
+          # Run (data in ./data/)
           ../git-sync-${VERSION}-linux-x86_64 sync
-          ```
+          \`\`\`
           
           ### Windows
           
-          ```powershell
+          \`\`\`powershell
           # Download
-          Invoke-WebRequest -Uri "https://github.com/${{ github.repository }}/releases/download/v${VERSION}/git-sync-${VERSION}-windows-x86_64.zip" -OutFile "git-sync.zip"
+          Invoke-WebRequest -Uri "https://github.com/${REPO}/releases/download/v${VERSION}/git-sync-${VERSION}-windows-x86_64.zip" -OutFile "git-sync.zip"
           
           # Extract
           Expand-Archive -Path "git-sync.zip" -DestinationPath "."
           
           # Create working directory
-          mkdir my-sync
-          cd my-sync
+          mkdir my-sync; cd my-sync
           
-          # Copy config example
+          # Copy config
           copy ..\git-sync.yaml.example config.yaml
           
           # Edit config
           notepad config.yaml
           
-          # Run (all data stored in .\data\)
+          # Run (data in .\data\)
           ..\git-sync-${VERSION}-windows-x86_64.exe sync
-          ```
+          \`\`\`
           
           ## Default Paths
           
           | Path | Default | Description |
           |------|---------|-------------|
-          | Config file | `./config.yaml` | Configuration file |
-          | State dir | `./data/state` | Sync state database |
-          | Repo dir | `./data/repos` | Local repo clones |
+          | Config file | ./config.yaml | Configuration file |
+          | State dir | ./data/state | Sync state database |
+          | Repo dir | ./data/repos | Local repo clones |
           
-          Override with `-c/--config` CLI option or in `settings:` section.
-          
-          ### Windows
-          
-          ```powershell
-          # Download
-          Invoke-WebRequest -Uri "https://github.com/${{ github.repository }}/releases/download/v${VERSION}/git-sync-${VERSION}-windows-x86_64.zip" -OutFile "git-sync-${VERSION}-windows-x86_64.zip"
-          
-          # Extract
-          Expand-Archive -Path "git-sync-${VERSION}-windows-x86_64.zip" -DestinationPath "."
-          
-          # Setup
-          mkdir "$env:USERPROFILE\.git-sync"
-          copy git-sync.yaml.example "$env:USERPROFILE\.git-sync\config.yaml"
-          notepad "$env:USERPROFILE\.git-sync\config.yaml"
-          
-          # Run
-          .\git-sync-${VERSION}-windows-x86_64.exe sync
-          ```
+          Override with \`-c/--config\` or in \`settings:\` section.
           
           ## CLI Usage
           
-          ```bash
-          # Show help
+          \`\`\`bash
           git-sync --help
-          
-          # Sync all repos
           git-sync sync
-          
-          # Sync specific repo
           git-sync sync -r my-repo
-          
-          # Show status
           git-sync status
-          
-          # Validate config
           git-sync config validate
-          
-          # Debug logging
           git-sync -l DEBUG sync
-          ```
+          \`\`\`
           
-          ## Config Example
-          
-          See `git-sync.yaml.example` in the release archive.
-          
-          Full documentation: https://github.com/${{ github.repository }}#readme
-          EOF
+          Full docs: https://github.com/${REPO}#readme
+          HEREDOC
           
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
