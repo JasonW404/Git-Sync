@@ -10,7 +10,17 @@ permissions:
 
 jobs:
   build-and-release:
-    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x86_64
+          - os: windows-latest
+            platform: windows
+            arch: x86_64
+    
+    runs-on: ${{ matrix.os }}
     
     steps:
       - name: Checkout code
@@ -30,17 +40,25 @@ jobs:
         run: |
           PYTHONPATH=src pytest tests/test_git_sync.py -v
           
-      - name: Build executable
+      - name: Build executable (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          pyinstaller build.spec --clean
+          
+      - name: Build executable (Windows)
+        if: matrix.platform == 'windows'
         run: |
           pyinstaller build.spec --clean
           
       - name: Get version from tag
         id: get_version
+        shell: bash
         run: |
           VERSION=${GITHUB_REF#refs/tags/v}
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           
-      - name: Create release archive
+      - name: Create release archive (Linux)
+        if: matrix.platform == 'linux'
         run: |
           VERSION=${{ steps.get_version.outputs.version }}
           mkdir -p release
@@ -52,22 +70,79 @@ jobs:
             git-sync.yaml.example \
             README.md
             
-      - name: Generate release notes
-        id: release_notes
+      - name: Create release archive (Windows)
+        if: matrix.platform == 'windows'
+        shell: bash
         run: |
           VERSION=${{ steps.get_version.outputs.version }}
-          cat > release_notes.md << EOF
+          mkdir -p release
+          cp dist/git-sync.exe release/git-sync-${VERSION}-windows-x86_64.exe
+          cp config/git-sync.yaml.example release/
+          cp README.md release/
+          7z a -tzip git-sync-${VERSION}-windows-x86_64.zip \
+            release/git-sync-${VERSION}-windows-x86_64.exe \
+            release/git-sync.yaml.example \
+            release/README.md
+            
+      - name: Upload artifact (Linux)
+        if: matrix.platform == 'linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-binary
+          path: git-sync-${{ steps.get_version.outputs.version }}-linux-x86_64.tar.gz
+          
+      - name: Upload artifact (Windows)
+        if: matrix.platform == 'windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-binary
+          path: git-sync-${{ steps.get_version.outputs.version }}-windows-x86_64.zip
+
+  create-release:
+    needs: build-and-release
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Get version from tag
+        id: get_version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-binary
+          
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-binary
+          
+      - name: Generate release notes
+        run: |
+          VERSION=${{ steps.get_version.outputs.version }}
+          cat > release_notes.md << 'EOF'
           ## System Requirements
           
+          **Linux:**
           - Ubuntu 22.04+ / Debian 12+ (GLIBC 2.35+)
           - git CLI (required)
           
-          Note: Built on Ubuntu 22.04 for better compatibility.
-          For older systems (Ubuntu 20.04 / Debian 11), contact maintainers.
+          **Windows:**
+          - Windows 10/11 (64-bit)
+          - git CLI (required)
+          
+          Note: Built on Ubuntu 22.04 / Windows Server for compatibility.
           
           ## Installation
           
-          \`\`\`bash
+          ### Linux
+          
+          ```bash
           # Download
           wget https://github.com/${{ github.repository }}/releases/download/v${VERSION}/git-sync-${VERSION}-linux-x86_64.tar.gz
           
@@ -81,11 +156,29 @@ jobs:
           
           # Run
           ./git-sync-${VERSION}-linux-x86_64 sync
-          \`\`\`
+          ```
+          
+          ### Windows
+          
+          ```powershell
+          # Download
+          Invoke-WebRequest -Uri "https://github.com/${{ github.repository }}/releases/download/v${VERSION}/git-sync-${VERSION}-windows-x86_64.zip" -OutFile "git-sync-${VERSION}-windows-x86_64.zip"
+          
+          # Extract
+          Expand-Archive -Path "git-sync-${VERSION}-windows-x86_64.zip" -DestinationPath "."
+          
+          # Setup
+          mkdir "$env:USERPROFILE\.git-sync"
+          copy git-sync.yaml.example "$env:USERPROFILE\.git-sync\config.yaml"
+          notepad "$env:USERPROFILE\.git-sync\config.yaml"
+          
+          # Run
+          .\git-sync-${VERSION}-windows-x86_64.exe sync
+          ```
           
           ## CLI Usage
           
-          \`\`\`bash
+          ```bash
           # Show help
           git-sync --help
           
@@ -103,11 +196,11 @@ jobs:
           
           # Debug logging
           git-sync -l DEBUG sync
-          \`\`\`
+          ```
           
           ## Config Example
           
-          See \`git-sync.yaml.example\` in the release archive.
+          See `git-sync.yaml.example` in the release archive.
           
           Full documentation: https://github.com/${{ github.repository }}#readme
           EOF
@@ -115,7 +208,9 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          files: git-sync-${{ steps.get_version.outputs.version }}-linux-x86_64.tar.gz
+          files: |
+            git-sync-${{ steps.get_version.outputs.version }}-linux-x86_64.tar.gz
+            git-sync-${{ steps.get_version.outputs.version }}-windows-x86_64.zip
           body_path: release_notes.md
           draft: false
           prerelease: false

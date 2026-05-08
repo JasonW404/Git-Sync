@@ -1,4 +1,5 @@
 import json
+import platform
 import signal
 import sys
 from pathlib import Path
@@ -11,7 +12,13 @@ from git_sync.core.state_manager import InMemoryStateManager
 from git_sync.models.config import LogLevel, RepoConfig, SyncTaskGroup, load_config
 from git_sync.utils.logger import get_logger, set_log_level
 
-DEFAULT_CONFIG_PATH = "/etc/git-sync/config.yaml"
+IS_WINDOWS = platform.system() == "Windows"
+
+if IS_WINDOWS:
+    DEFAULT_CONFIG_PATH = str(Path.home() / ".git-sync" / "config.yaml")
+else:
+    DEFAULT_CONFIG_PATH = "/etc/git-sync/config.yaml"
+
 console = Console()
 
 
@@ -24,7 +31,7 @@ def find_repo(sync_tasks: list[SyncTaskGroup], repo_id: str) -> RepoConfig | Non
 
 
 @click.group()
-@click.version_option(version="1.0.6", prog_name="git-sync")
+@click.version_option(version="1.0.7", prog_name="git-sync")
 @click.option(
     "-c",
     "--config",
@@ -90,19 +97,28 @@ def daemon(ctx: click.Context):
     logger.info("Starting git-sync daemon")
     scheduler.start()
 
-    def shutdown(signum, frame):
+    def shutdown(signum=None, frame=None):
         logger.info("Received signal, stopping scheduler")
         scheduler.stop()
         sys.exit(0)
 
-    signal.signal(signal.SIGINT, shutdown)
-    signal.signal(signal.SIGTERM, shutdown)
+    if IS_WINDOWS:
+        try:
+            import time
 
-    try:
-        while True:
-            signal.pause()
-    except KeyboardInterrupt:
-        shutdown(None, None)
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            shutdown()
+    else:
+        signal.signal(signal.SIGINT, shutdown)
+        signal.signal(signal.SIGTERM, shutdown)
+
+        try:
+            while True:
+                signal.pause()
+        except KeyboardInterrupt:
+            shutdown()
 
 
 @cli.command()
