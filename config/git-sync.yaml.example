@@ -52,6 +52,16 @@ sync_tasks:
         branches: ["main"]
         tags: true
 
+      - id: custom-port-service
+        source:
+          url: git@github.com:org/custom-port-service.git
+          ssh_private_key: ~/.ssh/id_rsa
+        destination:
+          url: git@git.internal.corp:2222:mirrors/custom-port-service.git
+          ssh_private_key: ~/.ssh/id_rsa_custom
+        branches: ["main"]
+        tags: true
+
   - name: internal-tools
     repos:
       - id: admin-dashboard

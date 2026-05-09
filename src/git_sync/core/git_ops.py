@@ -205,16 +205,36 @@ def prepare_url_for_clone(endpoint_config, is_source: bool = True) -> tuple[str,
     Returns:
         tuple: (prepared_url, env_dict) where env_dict contains GIT_SSH_COMMAND for SSH
     """
+    import re
+
     url = endpoint_config.url
     env = {}
 
     if endpoint_config.is_ssh:
         ssh_key = endpoint_config.ssh_private_key
+
+        ssh_cmd_parts = ["ssh"]
+
         if ssh_key:
             ssh_key_path = Path(ssh_key).expanduser().resolve()
-            env["GIT_SSH_COMMAND"] = (
-                f'ssh -i "{ssh_key_path}" -o IdentitiesOnly=yes -o StrictHostKeyChecking=no'
-            )
+            ssh_cmd_parts.extend(["-i", f'"{ssh_key_path}"'])
+
+        port = None
+        if url.startswith("ssh://"):
+            match = re.search(r"ssh://git@[^:]+:(\d+)/", url)
+            if match:
+                port = match.group(1)
+        else:
+            match = re.search(r"^git@[^:]+:(\d+):", url)
+            if match:
+                port = match.group(1)
+
+        if port:
+            ssh_cmd_parts.extend(["-p", str(port)])
+
+        ssh_cmd_parts.extend(["-o", "IdentitiesOnly=yes", "-o", "StrictHostKeyChecking=no"])
+
+        env["GIT_SSH_COMMAND"] = " ".join(ssh_cmd_parts)
         return url, env
 
     if endpoint_config.is_https:
