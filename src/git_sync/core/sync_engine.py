@@ -149,15 +149,29 @@ class SyncEngine:
             git_ops_push = GitOperations(repo_work_dir, env=dest_env)
 
             remotes = git_ops_push.get_remotes()
+            origin_exists = any(r["name"] == "origin" for r in remotes)
             has_internal = any(r["name"] == "internal" for r in remotes)
+
+            if not origin_exists:
+                source_url, source_env = prepare_url_for_clone(
+                    self.repo_config.source, is_source=True
+                )
+                git_ops_push.add_remote("origin", source_url)
+                logger.info("Re-added origin remote after git-filter-repo")
 
             if not has_internal:
                 git_ops_push.add_remote("internal", dest_url)
                 logger.debug("Added internal remote")
             else:
-                git_ops_push.remove_remote("internal")
-                git_ops_push.add_remote("internal", dest_url)
-                logger.debug("Updated internal remote")
+                existing_internal_url = None
+                for r in remotes:
+                    if r["name"] == "internal":
+                        existing_internal_url = r["refs"].get("push", r["refs"].get("fetch"))
+                        break
+                if existing_internal_url != dest_url:
+                    git_ops_push.remove_remote("internal")
+                    git_ops_push.add_remote("internal", dest_url)
+                    logger.debug("Updated internal remote URL")
 
             git_ops_push.push_all("internal", force=True)
             logger.info("Pushed all branches to destination")
