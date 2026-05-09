@@ -97,6 +97,26 @@ class SyncEngine:
 
             git_ops = GitOperations(repo_work_dir, env=source_env)
 
+            remotes = git_ops.get_remotes()
+            origin_remote = None
+            for r in remotes:
+                if r["name"] == "origin":
+                    origin_remote = r
+                    break
+
+            if origin_remote:
+                origin_url = origin_remote["refs"].get("fetch", origin_remote["refs"].get("push"))
+                if origin_url != source_url:
+                    logger.warning(
+                        f"Origin remote URL mismatch. Expected: {source_url}, Actual: {origin_url}"
+                    )
+                    logger.info("Updating origin remote to correct source URL")
+                    git_ops.remove_remote("origin")
+                    git_ops.add_remote("origin", source_url)
+            else:
+                logger.info("Adding origin remote")
+                git_ops.add_remote("origin", source_url)
+
             try:
                 git_ops.fetch_all()
             except GitError as e:
